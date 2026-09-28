@@ -16,7 +16,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "proveedores_defecto": "Proveedores.xlsx",
         "hoja_proveedores": "Hoja1",
         "salida_defecto": "./salida",
-        "archivo_606": "formato_606.csv",
+        "archivo_606": "formato_606.xlsx",
+        "archivo_606_csv": "formato_606.csv",
         "archivo_agrupacion": "agrupacion_sin_comprobante.xlsx",
         "archivo_incidencias": "incidencias.txt",
     },
@@ -74,7 +75,8 @@ class AppConfig:
     proveedores_path: Path
     salida_dir: Path
     hoja_proveedores: str = "Hoja1"
-    archivo_606: str = "formato_606.csv"
+    archivo_606: str = "formato_606.xlsx"
+    archivo_606_csv: str = "formato_606.csv"
     archivo_agrupacion: str = "agrupacion_sin_comprobante.xlsx"
     archivo_incidencias: str = "incidencias.txt"
     tasa_retencion: Decimal = Decimal("0.10")
@@ -137,7 +139,8 @@ class AppConfig:
             proveedores_path=p_path,
             salida_dir=out_dir,
             hoja_proveedores=archivos.get("hoja_proveedores", "Hoja1"),
-            archivo_606=archivos.get("archivo_606", "formato_606.csv"),
+            archivo_606=archivos.get("archivo_606", "formato_606.xlsx"),
+            archivo_606_csv=archivos.get("archivo_606_csv", "formato_606.csv"),
             archivo_agrupacion=archivos.get("archivo_agrupacion", "agrupacion_sin_comprobante.xlsx"),
             archivo_incidencias=archivos.get("archivo_incidencias", "incidencias.txt"),
             tasa_retencion=tasa_dec,

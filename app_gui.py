@@ -14,7 +14,12 @@ from tkinter import filedialog, messagebox, ttk
 
 from generador_606.config import AppConfig
 from generador_606.processor import load_providers, load_transactions, process_records
-from generador_606.writers import write_606_csv, write_excel_agrupacion, write_incidences_report
+from generador_606.writers import (
+    write_606_csv,
+    write_606_excel,
+    write_excel_agrupacion,
+    write_incidences_report,
+)
 
 
 class AppGUI(tk.Tk):
@@ -352,12 +357,16 @@ class AppGUI(tk.Tk):
 
             # 4. Escribir salidas
             out_dir.mkdir(parents=True, exist_ok=True)
-            p_606 = out_dir / cfg.archivo_606
+            p_606_xlsx = out_dir / (cfg.archivo_606 if cfg.archivo_606.endswith(".xlsx") else "formato_606.xlsx")
+            p_606_csv = out_dir / (cfg.archivo_606_csv or "formato_606.csv")
             p_excel = out_dir / cfg.archivo_agrupacion
             p_inc = out_dir / cfg.archivo_incidencias
 
-            self._log(f"\nGenerando {p_606.name}...")
-            write_606_csv(records, providers, p_606, cfg)
+            self._log(f"\nGenerando {p_606_xlsx.name} (Excel con columnas y formato)...")
+            write_606_excel(records, providers, p_606_xlsx, cfg)
+
+            # También generamos el CSV oficial
+            write_606_csv(records, providers, p_606_csv, cfg)
 
             self._log(f"Generando {p_excel.name}...")
             write_excel_agrupacion(records, p_excel, cfg)

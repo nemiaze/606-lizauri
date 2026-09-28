@@ -16,7 +16,12 @@ import sys
 
 from generador_606.config import AppConfig
 from generador_606.processor import load_providers, load_transactions, process_records
-from generador_606.writers import write_606_csv, write_excel_agrupacion, write_incidences_report
+from generador_606.writers import (
+    write_606_csv,
+    write_606_excel,
+    write_excel_agrupacion,
+    write_incidences_report,
+)
 
 
 def run_pipeline(config: AppConfig) -> int:
@@ -74,12 +79,16 @@ def run_pipeline(config: AppConfig) -> int:
     # 4. Generar salidas
     config.salida_dir.mkdir(parents=True, exist_ok=True)
 
-    path_606 = config.salida_dir / config.archivo_606
+    path_606_xlsx = config.salida_dir / (config.archivo_606 if config.archivo_606.endswith(".xlsx") else "formato_606.xlsx")
+    path_606_csv = config.salida_dir / (config.archivo_606_csv or "formato_606.csv")
     path_agrupacion = config.salida_dir / config.archivo_agrupacion
     path_incidencias = config.salida_dir / config.archivo_incidencias
 
-    print(f"\nEscribiendo archivo Formato 606: {path_606.name}...")
-    write_606_csv(records, providers, path_606, config)
+    print(f"\nEscribiendo archivo Formato 606 (Excel): {path_606_xlsx.name}...")
+    write_606_excel(records, providers, path_606_xlsx, config)
+
+    # También guardamos el CSV oficial por compatibilidad con carga web de la DGII
+    write_606_csv(records, providers, path_606_csv, config)
 
     print(f"Escribiendo libro Excel: {path_agrupacion.name}...")
     write_excel_agrupacion(records, path_agrupacion, config)
@@ -97,7 +106,8 @@ def run_pipeline(config: AppConfig) -> int:
     print("\n" + "=" * 75)
     print("  PROCESO COMPLETADO EXITOSAMENTE")
     print("=" * 75)
-    print(f"  1. Archivo 606 generado     : {path_606.resolve()}")
+    print(f"  1. Archivo 606 (Excel)      : {path_606_xlsx.resolve()}")
+    print(f"     Archivo 606 (CSV DGII)   : {path_606_csv.resolve()}")
     print(f"  2. Archivo Agrupación Excel : {path_agrupacion.resolve()}")
     print(f"  3. Reporte de Incidencias   : {path_incidencias.resolve()}")
     print("-" * 75)

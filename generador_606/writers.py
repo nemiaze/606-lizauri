@@ -176,6 +176,226 @@ def write_606_csv(
     return count
 
 
+def write_606_excel(
+    records: List[ProcessedRecord],
+    providers: Dict[str, ProviderMaster],
+    output_path: Path,
+    config: AppConfig
+) -> int:
+    """
+    Escribe el archivo formato_606.xlsx listo para usar en Excel sin necesidad
+    de convertir texto a columnas. Conserva ceros a la izquierda en RNCs/cédulas
+    y aplica formato numérico y bordes a los importes.
+    Retorna la cantidad de registros escritos.
+    """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Formato 606"
+
+    font_family = "Arial"
+    font_header = Font(name=font_family, size=10, bold=True, color="FFFFFF")
+    font_regular = Font(name=font_family, size=10)
+    font_bold = Font(name=font_family, size=10, bold=True)
+
+    fill_header = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+    fill_total = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+
+    thin_border_side = Side(style="thin", color="D9D9D9")
+    double_bottom_side = Side(style="double", color="000000")
+    top_thin_side = Side(style="thin", color="000000")
+
+    border_cell = Border(left=thin_border_side, right=thin_border_side, top=thin_border_side, bottom=thin_border_side)
+    border_total = Border(top=top_thin_side, bottom=double_bottom_side, left=thin_border_side, right=thin_border_side)
+
+    align_center = Alignment(horizontal="center", vertical="center")
+    align_right = Alignment(horizontal="right", vertical="center")
+
+    num_fmt_curr = "#,##0.00;(#,##0.00);-"
+
+    # Encabezado (Fila 1)
+    ws.append(HEADERS_606)
+    for col_idx in range(1, len(HEADERS_606) + 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.font = font_header
+        cell.fill = fill_header
+        cell.alignment = align_center
+
+    count = 0
+    curr_row = 2
+
+    for rec in records:
+        if not rec.is_606:
+            continue
+
+        count += 1
+        tx = rec.tx
+        p_master = providers.get(tx.proveedor_norm)
+
+        # 1. RNC o Cédula
+        rnc_str = rec.rnc_cedula or ""
+
+        # 2. Tipo Id (1 = RNC, 2 = Cédula)
+        tipo_id_str = rec.tipo_id or ""
+
+        # 3. Tipo Bienes y Servicios
+        tb_code = (p_master.tipo_bienes_servicios if (p_master and p_master.tipo_bienes_servicios)
+                   else config.tipo_bienes_servicios_606)
+
+        # 4. NCF
+        ncf_str = rec.ncf_valido or ""
+
+        # 5. NCF modificado
+        ncf_mod = ""
+
+        # 6 y 7. Fecha Comprobante (AAAAMM y DD)
+        if tx.fecha_parsed:
+            a, m, d = tx.fecha_parsed
+            f_aaaamm = f"{a:04d}{m:02d}"
+            f_dd = f"{d:02d}"
+        else:
+            f_aaaamm = ""
+            f_dd = ""
+
+        # 8 y 9. Fecha Pago
+        f_pago_aaaamm = ""
+        f_pago_dd = ""
+
+        # 10 y 11. Monto Servicios vs Bienes
+        subtotal = float(tx.importe_sujeto)
+        if config.bienes_vs_servicios_606.lower() == "servicios":
+            monto_servicios = subtotal
+            monto_bienes = 0.0
+        else:
+            monto_servicios = 0.0
+            monto_bienes = subtotal
+
+        # 12. Total Monto Facturado
+        total_facturado = subtotal
+
+        # 13. ITBIS Facturado
+        itbis_facturado = float(tx.impuesto)
+
+        # 14. ITBIS Retenido
+        itbis_retenido = None
+
+        # 15. ITBIS Proporcionalidad
+        itbis_prop = 0.0
+
+        # 16. ITBIS llevado al Costo
+        itbis_costo = 0.0
+
+        # 17. ITBIS por Adelantar = ITBIS Facturado - Prop - Costo
+        itbis_adelantar = float(tx.impuesto)
+
+        # 18 a 24: vacías
+        itbis_perc = None
+        tipo_ret_isr = None
+        monto_ret_renta = None
+        isr_perc = None
+        isc = None
+        otros_imp = None
+        propina = None
+
+        # 25. Forma de Pago (02 = Pagado, 04 = Crédito u otro)
+        if tx.cp_pagadas and tx.cp_pagadas.strip().lower() == "pagado":
+            forma_pago = config.forma_pago_pagado
+        else:
+            forma_pago = config.forma_pago_credito
+
+        row_vals = [
+            rnc_str,
+            tipo_id_str,
+            tb_code,
+            ncf_str,
+            ncf_mod,
+            f_aaaamm,
+            f_dd,
+            f_pago_aaaamm,
+            f_pago_dd,
+            monto_servicios,
+            monto_bienes,
+            total_facturado,
+            itbis_facturado,
+            itbis_retenido,
+            itbis_prop,
+            itbis_costo,
+            itbis_adelantar,
+            itbis_perc,
+            tipo_ret_isr,
+            monto_ret_renta,
+            isr_perc,
+            isc,
+            otros_imp,
+            propina,
+            forma_pago,
+        ]
+
+        ws.append(row_vals)
+
+        # Formatear celdas de la fila
+        for col_idx in range(1, 26):
+            cell = ws.cell(row=curr_row, column=col_idx)
+            cell.font = font_regular
+            cell.border = border_cell
+
+            # Importes numéricos
+            if col_idx in (10, 11, 12, 13, 15, 16, 17):
+                cell.number_format = num_fmt_curr
+                cell.alignment = align_right
+            # Textos y códigos que conservan ceros
+            elif col_idx in (1, 2, 3, 4, 5, 6, 7, 8, 9, 25):
+                cell.number_format = "@"
+                cell.alignment = align_center
+
+        curr_row += 1
+
+    last_data_row = curr_row - 1
+    total_row = curr_row
+
+    # Fila de totales para facilitar revisión
+    if last_data_row >= 2:
+        ws.cell(row=total_row, column=4, value="TOTAL").font = font_bold
+        ws.cell(row=total_row, column=4).alignment = align_center
+
+        for col_idx in range(1, 26):
+            c_tot = ws.cell(row=total_row, column=col_idx)
+            c_tot.font = font_bold
+            c_tot.fill = fill_total
+            c_tot.border = border_total
+
+            col_letter = get_column_letter(col_idx)
+            if col_idx in (10, 11, 12, 13, 15, 16, 17):
+                c_tot.value = f"=SUM({col_letter}2:{col_letter}{last_data_row})"
+                c_tot.number_format = num_fmt_curr
+                c_tot.alignment = align_right
+
+    ws.freeze_panes = "A2"
+
+    try:
+        ws.views.sheetView[0].showGridLines = True
+    except Exception:
+        pass
+
+    for col in ws.columns:
+        col_letter = get_column_letter(col[0].column)
+        max_len = 0
+        for cell in col:
+            val = cell.value
+            if val is not None:
+                s_val = str(val)
+                if s_val.startswith("="):
+                    val_len = 12
+                else:
+                    val_len = len(s_val.split("\n")[0])
+                if val_len > max_len:
+                    max_len = val_len
+        ws.column_dimensions[col_letter].width = max(max_len + 4, 11)
+
+    wb.save(output_path)
+    return count
+
+
 def write_excel_agrupacion(
     records: List[ProcessedRecord],
     output_path: Path,

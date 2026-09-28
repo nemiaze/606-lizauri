@@ -68,11 +68,9 @@ python generar_606.py --transacciones grande.xlsx --periodo 202608
 
 El programa deposita en la carpeta de salida (por defecto `./salida/`) tres archivos:
 
-### 1. `formato_606.csv`
-- Solo incluye los registros con **comprobante fiscal válido** (NCF tradicional `B...` de 11 caracteres o e-CF `E...` de 13 caracteres).
-- Codificación **UTF-8 con BOM** (`utf-8-sig`) para compatibilidad perfecta con Excel y los validadores de la DGII.
-- **25 columnas exactas** con los encabezados oficiales de la DGII.
-- RNCs/Cédulas conservan ceros a la izquierda y montos formateados a 2 decimales sin separador de miles.
+### 1. `formato_606.xlsx` (y formato alternativo `formato_606.csv`)
+- **`formato_606.xlsx` (Excel nativo):** Viene directamente dividido en sus **25 columnas oficiales**, estilizado con encabezado azul oscuro, importes numéricos con formato de moneda y texto para RNCs/fechas. **No requiere que el usuario haga conversión de texto a columnas ni configure delimitadores en Excel**. Incluye fila de totales de control.
+- **`formato_606.csv` (CSV oficial DGII):** Generado simultáneamente en codificación **UTF-8 con BOM** (`utf-8-sig`) con las 25 columnas separadas por comas, listo para subir directamente a las plataformas web o herramientas de validación de la DGII.
 
 ### 2. `agrupacion_sin_comprobante.xlsx`
 Libro de Excel estilizado con tipografía **Arial**, encabezados oscuros, paneles inmovilizados y **fórmulas vivas de Excel** (`fullCalcOnLoad = True`):

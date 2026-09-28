@@ -23,16 +23,30 @@ def test_full_pipeline_run(tmp_path):
     exit_code = run_pipeline(cfg)
     assert exit_code == 0
 
-    file_606 = out_dir / "formato_606.csv"
+    file_606_xlsx = out_dir / "formato_606.xlsx"
+    file_606_csv = out_dir / "formato_606.csv"
     file_excel = out_dir / "agrupacion_sin_comprobante.xlsx"
     file_incidencias = out_dir / "incidencias.txt"
 
-    assert file_606.exists()
+    assert file_606_xlsx.exists()
+    assert file_606_csv.exists()
     assert file_excel.exists()
     assert file_incidencias.exists()
 
+    # Verificar formato_606.xlsx
+    wb_606 = openpyxl.load_workbook(file_606_xlsx, data_only=False)
+    ws_606 = wb_606.active
+    assert ws_606.title == "Formato 606"
+    assert ws_606.cell(2, 1).value == "06600056540"
+    assert ws_606.cell(2, 4).value == "B0100000188"
+    assert ws_606.cell(2, 11).value == 2033.90
+    assert ws_606.cell(2, 13).value == 366.10
+    assert ws_606.cell(4, 1).value == "132465555"
+    assert ws_606.cell(4, 4).value == "B0100000383"
+    wb_606.close()
+
     # Verificar contenido de formato_606.csv
-    with open(file_606, "r", encoding="utf-8-sig") as f:
+    with open(file_606_csv, "r", encoding="utf-8-sig") as f:
         lines = [line.strip() for line in f if line.strip()]
 
     # 1 encabezado + 3 registros
