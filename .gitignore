@@ -1,0 +1,19 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pytest / Virtualenv
+.pytest_cache/
+.env
+.venv
+env/
+venv/
+
+# Carpetas de salida generadas localmente
+salida/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp

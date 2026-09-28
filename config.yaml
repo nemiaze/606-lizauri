@@ -1,0 +1,91 @@
+# =====================================================================
+# Configuración del Generador DGII 606 y Agrupación de Compras
+# =====================================================================
+
+# Archivos y rutas por defecto
+archivos:
+  transacciones_defecto: "muestra.xlsx"
+  proveedores_defecto: "Proveedores.xlsx"
+  hoja_proveedores: "Hoja1"
+  salida_defecto: "./salida"
+  archivo_606: "formato_606.csv"
+  archivo_agrupacion: "agrupacion_sin_comprobante.xlsx"
+  archivo_incidencias: "incidencias.txt"
+
+# Parámetros fiscales y de cálculo
+fiscal:
+  tasa_retencion_renta: 0.10             # 10% por defecto sobre servicios
+  tipo_bienes_servicios_606: "09"         # Código por defecto para el 606 (09 = Costo de venta)
+  tipo_retencion_isr: "02"                # 02 = Honorarios por servicios
+  bienes_vs_servicios_606: "Bienes"       # Clasificación por defecto para compras con NCF en el 606
+  forma_pago_defecto_credito: "04"        # 04 = Compra a crédito
+  forma_pago_defecto_pagado: "02"         # 02 = Cheques / Transferencias / Depósito
+
+# Clasificación de bienes y servicios según texto de la columna Nota
+# (Todas las comparaciones se realizan en minúsculas y sin acentos)
+clasificacion_nota:
+  keywords_servicio:
+    - "servicio"
+    - "servicios"
+    - "honorario"
+    - "honorarios"
+    - "mano de obra"
+    - "reparacion"
+    - "reparación"
+    - "mantenimiento"
+    - "alquiler"
+    - "arrendamiento"
+    - "transporte"
+    - "flete"
+    - "asesoria"
+    - "asesoría"
+    - "consultoria"
+    - "consultoría"
+    - "instalacion"
+    - "instalación"
+    - "confeccion"
+    - "confección"
+  keywords_bien:
+    - "bien"
+    - "bienes"
+    - "mercancia"
+    - "mercancía"
+    - "material"
+    - "materiales"
+    - "compra"
+    - "suministro"
+    - "suministros"
+    - "pieza"
+    - "piezas"
+    - "repuesto"
+    - "repuestos"
+    - "equipo"
+    - "equipos"
+    - "herramienta"
+    - "herramientas"
+
+# Excepciones: proveedores que van directo a Gastos Menores (B13)
+excepciones_gastos_menores:
+  proveedores_b13:
+    - "dj ludo"
+
+# Mapeo de columnas esperadas en transacciones (flexibles ante tildes y mayúsculas)
+columnas_transacciones:
+  fecha: "Fecha"
+  tipo_transaccion: "Tipo de transacción"
+  numero: "Número"
+  proveedor: "Proveedor"
+  producto_servicio: "Producto/servicio"
+  nota: "Nota"
+  importe: "Importe"
+  impuesto: "Impuesto"
+  departamento: "$$Departamento$$"
+  importe_sujeto_impuestos: "Importe sujeto a impuestos"
+  cp_pagadas: "C/P pagadas"
+
+# Mapeo de columnas en el maestro de proveedores
+columnas_proveedores:
+  proveedor: "Proveedor"
+  rnc_cedula: "RNC/CEDULA"
+  razon_social: "RAZON SOCIAL"
+  tipo_bienes_servicios: "Tipo Bienes y Servicios Comprados"
