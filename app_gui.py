@@ -57,7 +57,8 @@ class AppGUI(tk.Tk):
         self.var_transacciones = tk.StringVar(value=str(cwd / tx_default) if (cwd / tx_default).exists() else tx_default)
         self.var_proveedores = tk.StringVar(value=str(cwd / "Proveedores.xlsx") if (cwd / "Proveedores.xlsx").exists() else "Proveedores.xlsx")
         self.var_salida = tk.StringVar(value=str(cwd / "salida"))
-        self.var_tasa = tk.StringVar(value="10")
+        self.var_tasa_prof = tk.StringVar(value="15")
+        self.var_tasa_no_prof = tk.StringVar(value="3")
         self.var_periodo = tk.StringVar(value="")
 
     def _build_ui(self):
@@ -147,21 +148,28 @@ class AppGUI(tk.Tk):
         )
         card_params.pack(fill="x", pady=(0, 10))
 
-        # Tasa de retención
-        lbl_tasa = tk.Label(card_params, text="Tasa Retención Renta (%):", font=("Segoe UI", 9), bg="#FFFFFF")
-        lbl_tasa.grid(row=0, column=0, sticky="w", pady=4)
-        ent_tasa = tk.Entry(card_params, textvariable=self.var_tasa, width=8, font=("Segoe UI", 9))
-        ent_tasa.grid(row=0, column=1, sticky="w", padx=10, pady=4)
-        lbl_tasa_hint = tk.Label(card_params, text="(Por defecto 10% sobre servicios sin comprobante)", font=("Segoe UI", 8), fg="#718096", bg="#FFFFFF")
-        lbl_tasa_hint.grid(row=0, column=2, sticky="w")
+        # Tasas de retención diferenciadas
+        lbl_tasa_prof = tk.Label(card_params, text="Tasa Retención Profesional (%):", font=("Segoe UI", 9), bg="#FFFFFF")
+        lbl_tasa_prof.grid(row=0, column=0, sticky="w", pady=4)
+        ent_tasa_prof = tk.Entry(card_params, textvariable=self.var_tasa_prof, width=8, font=("Segoe UI", 9))
+        ent_tasa_prof.grid(row=0, column=1, sticky="w", padx=10, pady=4)
+        lbl_tasa_prof_hint = tk.Label(card_params, text="(Honorarios, asesorías, consultorías — por defecto 15%)", font=("Segoe UI", 8), fg="#718096", bg="#FFFFFF")
+        lbl_tasa_prof_hint.grid(row=0, column=2, sticky="w")
+
+        lbl_tasa_no = tk.Label(card_params, text="Tasa Retención No Profesional (%):", font=("Segoe UI", 9), bg="#FFFFFF")
+        lbl_tasa_no.grid(row=1, column=0, sticky="w", pady=4)
+        ent_tasa_no = tk.Entry(card_params, textvariable=self.var_tasa_no_prof, width=8, font=("Segoe UI", 9))
+        ent_tasa_no.grid(row=1, column=1, sticky="w", padx=10, pady=4)
+        lbl_tasa_no_hint = tk.Label(card_params, text="(Mano de obra, transporte, mantenimiento — por defecto 3%)", font=("Segoe UI", 8), fg="#718096", bg="#FFFFFF")
+        lbl_tasa_no_hint.grid(row=1, column=2, sticky="w")
 
         # Período fiscal
         lbl_per = tk.Label(card_params, text="Período Fiscal (opcional):", font=("Segoe UI", 9), bg="#FFFFFF")
-        lbl_per.grid(row=1, column=0, sticky="w", pady=4)
+        lbl_per.grid(row=2, column=0, sticky="w", pady=4)
         ent_per = tk.Entry(card_params, textvariable=self.var_periodo, width=12, font=("Segoe UI", 9))
-        ent_per.grid(row=1, column=1, sticky="w", padx=10, pady=4)
+        ent_per.grid(row=2, column=1, sticky="w", padx=10, pady=4)
         lbl_per_hint = tk.Label(card_params, text="(Formato AAAAMM, ej. 202608 para auditar fechas)", font=("Segoe UI", 8), fg="#718096", bg="#FFFFFF")
-        lbl_per_hint.grid(row=1, column=2, sticky="w")
+        lbl_per_hint.grid(row=2, column=2, sticky="w")
 
         # Botones de acción
         btn_frame = tk.Frame(content, bg="#F4F6F9")
@@ -307,9 +315,14 @@ class AppGUI(tk.Tk):
                 raise FileNotFoundError(f"No existe el maestro de proveedores: {pr_path}")
 
             try:
-                tasa_val = float(self.var_tasa.get().strip()) / 100.0
+                tasa_prof_val = float(self.var_tasa_prof.get().strip()) / 100.0
             except ValueError:
-                tasa_val = 0.10
+                tasa_prof_val = 0.15
+
+            try:
+                tasa_no_prof_val = float(self.var_tasa_no_prof.get().strip()) / 100.0
+            except ValueError:
+                tasa_no_prof_val = 0.03
 
             periodo_val = self.var_periodo.get().strip() or None
 
@@ -318,7 +331,8 @@ class AppGUI(tk.Tk):
             self._log("=" * 65, "TITLE")
             self._log(f"Transacciones : {tx_path.name}")
             self._log(f"Proveedores   : {pr_path.name}")
-            self._log(f"Tasa Retención: {tasa_val * 100:.1f}%")
+            self._log(f"Tasa Prof.    : {tasa_prof_val * 100:.1f}%")
+            self._log(f"Tasa No Prof. : {tasa_no_prof_val * 100:.1f}%")
             if periodo_val:
                 self._log(f"Período Fiscal: {periodo_val}")
             self._log("-" * 65)
@@ -329,7 +343,8 @@ class AppGUI(tk.Tk):
                 transacciones_path=str(tx_path),
                 proveedores_path=str(pr_path),
                 salida_dir=str(out_dir),
-                tasa_retencion=tasa_val,
+                tasa_retencion_profesional=tasa_prof_val,
+                tasa_retencion_no_profesional=tasa_no_prof_val,
                 periodo=periodo_val
             )
 

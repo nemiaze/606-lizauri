@@ -60,14 +60,14 @@ def write_606_csv(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     count = 0
 
+    valid_records = [r for r in records if r.is_606]
+    valid_records.sort(key=lambda r: (r.tx.proveedor_norm, r.ncf_valido or ""))
+
     with open(output_path, "w", encoding="utf-8-sig", newline="") as f:
         # Escribir encabezado
         f.write(",".join(HEADERS_606) + "\r\n")
 
-        for rec in records:
-            if not rec.is_606:
-                continue
-
+        for rec in valid_records:
             count += 1
             tx = rec.tx
             p_master = providers.get(tx.proveedor_norm)
@@ -78,9 +78,10 @@ def write_606_csv(
             # 2. Tipo Id (1 = RNC, 2 = Cédula)
             tipo_id_str = rec.tipo_id or ""
 
-            # 3. Tipo Bienes y Servicios
+            # 3. Tipo Bienes y Servicios (formato CSV requiere código de 2 dígitos, ej. '09')
             tb_code = (p_master.tipo_bienes_servicios if (p_master and p_master.tipo_bienes_servicios)
                        else config.tipo_bienes_servicios_606)
+            tb_code_csv = tb_code[:2] if tb_code else "09"
 
             # 4. NCF
             ncf_str = rec.ncf_valido or ""
@@ -97,13 +98,14 @@ def write_606_csv(
                 f_aaaamm = ""
                 f_dd = ""
 
-            # 8 y 9. Fecha Pago (vacías)
+            # 8 y 9. Fecha Pago (en CSV vacía por especificación DGII)
             f_pago_aaaamm = ""
             f_pago_dd = ""
 
             # 10 y 11. Monto Servicios vs Bienes
             subtotal = tx.importe_sujeto
-            if config.bienes_vs_servicios_606.lower() == "servicios":
+            es_servicio = (config.bienes_vs_servicios_606.lower() == "servicios" or rec.tipo_gasto in ("Servicio", "Servicio Profesional", "Servicio No Profesional"))
+            if es_servicio:
                 monto_servicios = f"{subtotal:.2f}"
                 monto_bienes = "0.00"
             else:
@@ -113,8 +115,11 @@ def write_606_csv(
             # 12. Total Monto Facturado
             total_facturado = f"{subtotal:.2f}"
 
-            # 13. ITBIS Facturado
-            itbis_facturado = f"{tx.impuesto:.2f}"
+            # 13. ITBIS Facturado: tomar el impuesto real de la factura
+            if rec.itbis_exento:
+                itbis_facturado = "0.00"
+            else:
+                itbis_facturado = f"{tx.impuesto:.2f}"
 
             # 14. ITBIS Retenido
             itbis_retenido = ""
@@ -125,8 +130,8 @@ def write_606_csv(
             # 16. ITBIS llevado al Costo
             itbis_costo = "0.00"
 
-            # 17. ITBIS por Adelantar = ITBIS Facturado - Prop - Costo
-            itbis_adelantar = f"{tx.impuesto:.2f}"
+            # 17. ITBIS por Adelantar = ITBIS Facturado
+            itbis_adelantar = itbis_facturado
 
             # 18 a 24: vacías
             itbis_perc = ""
@@ -137,16 +142,13 @@ def write_606_csv(
             otros_imp = ""
             propina = ""
 
-            # 25. Forma de Pago (02 = Pagado, 04 = Crédito u otro)
-            if tx.cp_pagadas and tx.cp_pagadas.strip().lower() == "pagado":
-                forma_pago = config.forma_pago_pagado
-            else:
-                forma_pago = config.forma_pago_credito
+            # 25. Forma de Pago (formato CSV requiere código de 2 dígitos, ej. '02')
+            forma_pago_csv = config.forma_pago_pagado[:2] if config.forma_pago_pagado else "02"
 
             row_data = [
                 rnc_str,
                 tipo_id_str,
-                tb_code,
+                tb_code_csv,
                 ncf_str,
                 ncf_mod,
                 f_aaaamm,
@@ -168,7 +170,7 @@ def write_606_csv(
                 isc,
                 otros_imp,
                 propina,
-                forma_pago,
+                forma_pago_csv,
             ]
 
             f.write(",".join(row_data) + "\r\n")
@@ -221,13 +223,13 @@ def write_606_excel(
         cell.fill = fill_header
         cell.alignment = align_center
 
+    valid_records = [r for r in records if r.is_606]
+    valid_records.sort(key=lambda r: (r.tx.proveedor_norm, r.ncf_valido or ""))
+
     count = 0
     curr_row = 2
 
-    for rec in records:
-        if not rec.is_606:
-            continue
-
+    for rec in valid_records:
         count += 1
         tx = rec.tx
         p_master = providers.get(tx.proveedor_norm)
@@ -246,7 +248,7 @@ def write_606_excel(
         ncf_str = rec.ncf_valido or ""
 
         # 5. NCF modificado
-        ncf_mod = ""
+        ncf_mod = None
 
         # 6 y 7. Fecha Comprobante (AAAAMM y DD)
         if tx.fecha_parsed:
@@ -254,39 +256,43 @@ def write_606_excel(
             f_aaaamm = f"{a:04d}{m:02d}"
             f_dd = f"{d:02d}"
         else:
-            f_aaaamm = ""
-            f_dd = ""
+            f_aaaamm = None
+            f_dd = None
 
-        # 8 y 9. Fecha Pago
-        f_pago_aaaamm = ""
-        f_pago_dd = ""
+        # 8 y 9. Fecha Pago (igual a Fecha Comprobante)
+        f_pago_aaaamm = f_aaaamm
+        f_pago_dd = f_dd
 
         # 10 y 11. Monto Servicios vs Bienes
         subtotal = float(tx.importe_sujeto)
-        if config.bienes_vs_servicios_606.lower() == "servicios":
+        es_servicio = (config.bienes_vs_servicios_606.lower() == "servicios" or rec.tipo_gasto in ("Servicio", "Servicio Profesional", "Servicio No Profesional"))
+        if es_servicio:
             monto_servicios = subtotal
-            monto_bienes = 0.0
+            monto_bienes = None
         else:
-            monto_servicios = 0.0
+            monto_servicios = None
             monto_bienes = subtotal
 
         # 12. Total Monto Facturado
         total_facturado = subtotal
 
-        # 13. ITBIS Facturado
-        itbis_facturado = float(tx.impuesto)
+        # 13. ITBIS Facturado: tomar el impuesto real de la factura
+        if rec.itbis_exento:
+            itbis_facturado = 0.0
+        else:
+            itbis_facturado = float(tx.impuesto)
 
         # 14. ITBIS Retenido
         itbis_retenido = None
 
         # 15. ITBIS Proporcionalidad
-        itbis_prop = 0.0
+        itbis_prop = None
 
         # 16. ITBIS llevado al Costo
-        itbis_costo = 0.0
+        itbis_costo = None
 
-        # 17. ITBIS por Adelantar = ITBIS Facturado - Prop - Costo
-        itbis_adelantar = float(tx.impuesto)
+        # 17. ITBIS por Adelantar = ITBIS Facturado
+        itbis_adelantar = itbis_facturado
 
         # 18 a 24: vacías
         itbis_perc = None
@@ -297,11 +303,8 @@ def write_606_excel(
         otros_imp = None
         propina = None
 
-        # 25. Forma de Pago (02 = Pagado, 04 = Crédito u otro)
-        if tx.cp_pagadas and tx.cp_pagadas.strip().lower() == "pagado":
-            forma_pago = config.forma_pago_pagado
-        else:
-            forma_pago = config.forma_pago_credito
+        # 25. Forma de Pago: forzar 02 (cheque/transferencia)
+        forma_pago = config.forma_pago_pagado
 
         row_vals = [
             rnc_str,
@@ -349,26 +352,6 @@ def write_606_excel(
                 cell.alignment = align_center
 
         curr_row += 1
-
-    last_data_row = curr_row - 1
-    total_row = curr_row
-
-    # Fila de totales para facilitar revisión
-    if last_data_row >= 2:
-        ws.cell(row=total_row, column=4, value="TOTAL").font = font_bold
-        ws.cell(row=total_row, column=4).alignment = align_center
-
-        for col_idx in range(1, 26):
-            c_tot = ws.cell(row=total_row, column=col_idx)
-            c_tot.font = font_bold
-            c_tot.fill = fill_total
-            c_tot.border = border_total
-
-            col_letter = get_column_letter(col_idx)
-            if col_idx in (10, 11, 12, 13, 15, 16, 17):
-                c_tot.value = f"=SUM({col_letter}2:{col_letter}{last_data_row})"
-                c_tot.number_format = num_fmt_curr
-                c_tot.alignment = align_right
 
     ws.freeze_panes = "A2"
 
@@ -445,7 +428,8 @@ def write_excel_agrupacion(
     ws_detalle = wb.create_sheet(title="Detalle")
     headers_detalle = [
         "Fecha", "Proveedor", "RNC o Cédula", "Fuente del RNC", "Tipo",
-        "Destino", "Nota", "Subtotal", "ITBIS", "Importe", "Entidad",
+        "Destino", "Nota", "Importe Total", "Monto sujeto a retención", "ITBIS",
+        "Monto Retención de renta", "Importe Efectivo", "Entidad",
         "Número (no válido)", "Observaciones"
     ]
     ws_detalle.append(headers_detalle)
@@ -459,6 +443,9 @@ def write_excel_agrupacion(
 
     # Agregar filas de registros sin comprobante
     non_606_records = [r for r in records if not r.is_606]
+    t_prof = float(config.tasa_retencion_profesional)
+    t_no_prof = float(config.tasa_retencion_no_profesional)
+
     for r in non_606_records:
         tx = r.tx
         # Fecha formateada yyyy-mm-dd
@@ -470,6 +457,27 @@ def write_excel_agrupacion(
         nota_limpia = tx.nota.replace("\r\n", " | ").replace("\n", " | ") if tx.nota else ""
         obs_str = "; ".join(r.observaciones) if r.observaciones else ""
 
+        monto_pagado = float(tx.importe_sujeto)
+
+        if r.tipo_gasto == "Servicio No Profesional":
+            monto_sujeto = round(monto_pagado / (1.0 - t_no_prof), 2)
+            ret_renta = round(monto_sujeto * t_no_prof, 2)
+            itbis_calc = 0.0 if r.itbis_exento else round(monto_sujeto * 0.18, 2)
+        elif r.tipo_gasto == "Servicio Profesional":
+            monto_sujeto = round(monto_pagado / (1.0 - t_prof), 2)
+            ret_renta = round(monto_sujeto * t_prof, 2)
+            itbis_calc = 0.0 if r.itbis_exento else round(monto_sujeto * 0.18, 2)
+        elif r.tipo_gasto == "Bien":
+            monto_sujeto = monto_pagado
+            ret_renta = 0.0
+            itbis_calc = 0.0 if r.itbis_exento else round(monto_sujeto * 0.18, 2)
+        else:
+            monto_sujeto = monto_pagado
+            ret_renta = 0.0
+            itbis_calc = 0.0 if r.itbis_exento else (float(tx.impuesto) if float(tx.impuesto) > 0 else 0.0)
+
+        importe_efectivo = round(monto_sujeto + itbis_calc, 2)
+
         row_vals = [
             f_str,
             tx.proveedor,
@@ -478,9 +486,11 @@ def write_excel_agrupacion(
             r.tipo_gasto,
             r.destino,
             nota_limpia,
-            float(tx.importe_sujeto),
-            float(tx.impuesto),
-            float(tx.importe),
+            monto_pagado,
+            monto_sujeto,
+            itbis_calc,
+            ret_renta,
+            importe_efectivo,
             tx.departamento,
             tx.numero,
             obs_str
@@ -493,10 +503,10 @@ def write_excel_agrupacion(
             cell = ws_detalle.cell(row=row_idx, column=col_idx)
             cell.font = font_regular
             cell.border = border_cell
-            if col_idx in (8, 9, 10):  # Subtotal, ITBIS, Importe
+            if col_idx in (8, 9, 10, 11, 12):  # Importe Total, Monto sujeto, ITBIS, Ret. renta, Importe Efectivo
                 cell.number_format = num_fmt_curr
                 cell.alignment = align_right
-            elif col_idx in (1, 3, 4, 5, 6, 12):  # Fecha, RNC, etc.
+            elif col_idx in (1, 3, 4, 5, 6, 14):  # Fecha, RNC, etc.
                 cell.alignment = align_center
                 if col_idx == 3:
                     cell.number_format = "@"
@@ -509,33 +519,52 @@ def write_excel_agrupacion(
     ws_agrupado = wb.active
     ws_agrupado.title = "Agrupado por proveedor"
 
-    # Encabezado superior / Tasa de retención
+    # Encabezado superior
     ws_agrupado.cell(row=1, column=1, value="AGRUPACIÓN DE COMPRAS SIN COMPROBANTE (DGII)").font = font_title
-    
-    lbl_rate = ws_agrupado.cell(row=3, column=1, value="Tasa de retención:")
-    lbl_rate.font = font_bold
-    lbl_rate.alignment = align_right
 
-    cell_rate = ws_agrupado.cell(row=3, column=2, value=float(config.tasa_retencion))
-    cell_rate.font = font_rate
-    cell_rate.fill = fill_yellow_rate
-    cell_rate.alignment = align_center
-    cell_rate.number_format = "0.0%"
-    cell_rate.border = border_rate
-    cell_rate.comment = Comment(
-        "Tasa de retención editable aplicable a servicios.\n"
-        "Modifique este porcentaje para recalcular automáticamente las retenciones.",
+    # Fila 3: Tasa Servicios Profesionales (15%)
+    lbl_prof = ws_agrupado.cell(row=3, column=1, value="Tasa retención profesional (15%):")
+    lbl_prof.font = font_bold
+    lbl_prof.alignment = align_right
+
+    cell_rate_prof = ws_agrupado.cell(row=3, column=2, value=float(config.tasa_retencion_profesional))
+    cell_rate_prof.font = font_rate
+    cell_rate_prof.fill = fill_yellow_rate
+    cell_rate_prof.alignment = align_center
+    cell_rate_prof.number_format = "0.0%"
+    cell_rate_prof.border = border_rate
+    cell_rate_prof.comment = Comment(
+        "Tasa de retención ISR para Servicios Profesionales (honorarios, asesoría,\n"
+        "consultoría, etc.). Por defecto: 15%. Editable para recalcular retenciones.",
         "Generador 606"
     )
 
+    # Fila 4: Tasa Servicios No Profesionales (3%)
+    lbl_no_prof = ws_agrupado.cell(row=4, column=1, value="Tasa retención no profesional (3%):")
+    lbl_no_prof.font = font_bold
+    lbl_no_prof.alignment = align_right
+
+    cell_rate_no_prof = ws_agrupado.cell(row=4, column=2, value=float(config.tasa_retencion_no_profesional))
+    cell_rate_no_prof.font = font_rate
+    cell_rate_no_prof.fill = fill_yellow_rate
+    cell_rate_no_prof.alignment = align_center
+    cell_rate_no_prof.number_format = "0.0%"
+    cell_rate_no_prof.border = border_rate
+    cell_rate_no_prof.comment = Comment(
+        "Tasa de retención ISR para Servicios No Profesionales (mano de obra,\n"
+        "transporte, mantenimiento, etc.). Por defecto: 3%. Editable.",
+        "Generador 606"
+    )
+
+    # Encabezados de la tabla (fila 6, encabezados de datos en fila 6)
     headers_agrupado = [
         "RNC o Cédula", "Tipo Id", "Proveedor", "Registros",
-        "Servicios (sujeto a retención)", "Bienes", "Sin clasificar",
-        "Total facturado (subtotal)", "ITBIS", "Retención de renta",
+        "Serv. Profesional (15%)", "Serv. No Profesional (3%)", "Bienes", "Sin clasificar",
+        "Importe Total (pagado)", "Monto sujeto a retención", "ITBIS", "Monto Retención de renta",
         "Tipo Retención ISR", "NCF (por asignar)", "Observaciones"
     ]
 
-    header_row_agrupado = 5
+    header_row_agrupado = 6
     for col_idx, h_text in enumerate(headers_agrupado, start=1):
         c = ws_agrupado.cell(row=header_row_agrupado, column=col_idx, value=h_text)
         c.font = font_header
@@ -559,8 +588,8 @@ def write_excel_agrupacion(
                     if obs not in grouped_map[norm_p]["observaciones"]:
                         grouped_map[norm_p]["observaciones"].append(obs)
 
-    # Insertar filas de proveedores agrupados
-    curr_row = 6
+    # Insertar filas de proveedores agrupados (datos desde fila 7)
+    curr_row = 7
     for norm_p, info in grouped_map.items():
         prov_name = info["display_name"]
         rnc_str = info["rnc"]
@@ -580,57 +609,67 @@ def write_excel_agrupacion(
         cC = ws_agrupado.cell(row=curr_row, column=3, value=prov_name)
         cC.alignment = align_left
 
-        # Col D: Registros: COUNTIFS(Detalle!$B:$B, C{row}, Detalle!$F:$F, "Agrupado")
+        # Col D: Registros
         cD = ws_agrupado.cell(row=curr_row, column=4, value=f'=COUNTIFS(Detalle!$B:$B, C{curr_row}, Detalle!$F:$F, "Agrupado")')
         cD.number_format = num_fmt_int
         cD.alignment = align_right
 
-        # Col E: Servicios: SUMIFS(Detalle!$H:$H, Detalle!$B:$B, C{row}, Detalle!$F:$F, "Agrupado", Detalle!$E:$E, "Servicio")
-        cE = ws_agrupado.cell(row=curr_row, column=5, value=f'=SUMIFS(Detalle!$H:$H, Detalle!$B:$B, C{curr_row}, Detalle!$F:$F, "Agrupado", Detalle!$E:$E, "Servicio")')
+        # Col E: Servicios Profesionales (15%)
+        cE = ws_agrupado.cell(row=curr_row, column=5, value=f'=SUMIFS(Detalle!$I:$I, Detalle!$B:$B, C{curr_row}, Detalle!$F:$F, "Agrupado", Detalle!$E:$E, "Servicio Profesional")')
         cE.number_format = num_fmt_curr
         cE.alignment = align_right
 
-        # Col F: Bienes: SUMIFS(Detalle!$H:$H, Detalle!$B:$B, C{row}, Detalle!$F:$F, "Agrupado", Detalle!$E:$E, "Bien")
-        cF = ws_agrupado.cell(row=curr_row, column=6, value=f'=SUMIFS(Detalle!$H:$H, Detalle!$B:$B, C{curr_row}, Detalle!$F:$F, "Agrupado", Detalle!$E:$E, "Bien")')
+        # Col F: Servicios No Profesionales (3%)
+        cF = ws_agrupado.cell(row=curr_row, column=6, value=f'=SUMIFS(Detalle!$I:$I, Detalle!$B:$B, C{curr_row}, Detalle!$F:$F, "Agrupado", Detalle!$E:$E, "Servicio No Profesional")')
         cF.number_format = num_fmt_curr
         cF.alignment = align_right
 
-        # Col G: Sin clasificar: SUMIFS(Detalle!$H:$H, Detalle!$B:$B, C{row}, Detalle!$F:$F, "Agrupado", Detalle!$E:$E, "Sin clasificar")
-        cG = ws_agrupado.cell(row=curr_row, column=7, value=f'=SUMIFS(Detalle!$H:$H, Detalle!$B:$B, C{curr_row}, Detalle!$F:$F, "Agrupado", Detalle!$E:$E, "Sin clasificar")')
+        # Col G: Bienes
+        cG = ws_agrupado.cell(row=curr_row, column=7, value=f'=SUMIFS(Detalle!$I:$I, Detalle!$B:$B, C{curr_row}, Detalle!$F:$F, "Agrupado", Detalle!$E:$E, "Bien")')
         cG.number_format = num_fmt_curr
         cG.alignment = align_right
 
-        # Col H: Total facturado: =SUM(E{row}:G{row})
-        cH = ws_agrupado.cell(row=curr_row, column=8, value=f'=SUM(E{curr_row}:G{curr_row})')
+        # Col H: Sin clasificar
+        cH = ws_agrupado.cell(row=curr_row, column=8, value=f'=SUMIFS(Detalle!$I:$I, Detalle!$B:$B, C{curr_row}, Detalle!$F:$F, "Agrupado", Detalle!$E:$E, "Sin clasificar")')
         cH.number_format = num_fmt_curr
         cH.alignment = align_right
 
-        # Col I: ITBIS: =SUMIFS(Detalle!$I:$I, Detalle!$B:$B, C{row}, Detalle!$F:$F, "Agrupado")
-        cI = ws_agrupado.cell(row=curr_row, column=9, value=f'=SUMIFS(Detalle!$I:$I, Detalle!$B:$B, C{curr_row}, Detalle!$F:$F, "Agrupado")')
+        # Col I: Importe Total (pagado)
+        cI = ws_agrupado.cell(row=curr_row, column=9, value=f'=SUMIFS(Detalle!$H:$H, Detalle!$B:$B, C{curr_row}, Detalle!$F:$F, "Agrupado")')
         cI.number_format = num_fmt_curr
         cI.alignment = align_right
 
-        # Col J: Retención renta: =ROUND(E{row} * $B$3, 2)
-        cJ = ws_agrupado.cell(row=curr_row, column=10, value=f'=ROUND(E{curr_row} * $B$3, 2)')
+        # Col J: Monto sujeto a retención: =SUM(E:H)
+        cJ = ws_agrupado.cell(row=curr_row, column=10, value=f'=SUM(E{curr_row}:H{curr_row})')
         cJ.number_format = num_fmt_curr
         cJ.alignment = align_right
 
-        # Col K: Tipo Retención ISR: =IF(E{row}>0, "02", "")
-        cK = ws_agrupado.cell(row=curr_row, column=11, value=f'=IF(E{curr_row}>0, "{config.tipo_retencion_isr}", "")')
-        cK.alignment = align_center
+        # Col K: ITBIS
+        cK = ws_agrupado.cell(row=curr_row, column=11, value=f'=SUMIFS(Detalle!$J:$J, Detalle!$B:$B, C{curr_row}, Detalle!$F:$F, "Agrupado")')
+        cK.number_format = num_fmt_curr
+        cK.alignment = align_right
 
-        # Col L: NCF (por asignar)
-        cL = ws_agrupado.cell(row=curr_row, column=12, value="")
-        cL.alignment = align_center
+        # Col L: Retención renta = Prof*15% + NoProf*3%
+        cL = ws_agrupado.cell(row=curr_row, column=12, value=f'=ROUND(E{curr_row}*$B$3 + F{curr_row}*$B$4, 2)')
+        cL.number_format = num_fmt_curr
+        cL.alignment = align_right
 
-        # Col M: Observaciones
-        cM = ws_agrupado.cell(row=curr_row, column=13, value=obs_text)
-        cM.alignment = align_left
+        # Col M: Tipo Retención ISR: "02" si hay algún servicio con retención
+        cM = ws_agrupado.cell(row=curr_row, column=13, value=f'=IF(L{curr_row}>0, "{config.tipo_retencion_isr}", "")')
+        cM.alignment = align_center
+
+        # Col N: NCF (por asignar)
+        cN = ws_agrupado.cell(row=curr_row, column=14, value="")
+        cN.alignment = align_center
+
+        # Col O: Observaciones
+        cO = ws_agrupado.cell(row=curr_row, column=15, value=obs_text)
+        cO.alignment = align_left
         if obs_text:
-            cM.fill = fill_obs_warn
+            cO.fill = fill_obs_warn
 
         # Aplicar bordes y fuentes a la fila
-        for col_idx in range(1, 14):
+        for col_idx in range(1, 16):
             c_target = ws_agrupado.cell(row=curr_row, column=col_idx)
             c_target.font = font_regular
             c_target.border = border_cell
@@ -643,35 +682,33 @@ def write_excel_agrupacion(
     ws_agrupado.cell(row=total_row, column=3, value="TOTAL").font = font_bold
     ws_agrupado.cell(row=total_row, column=3).alignment = align_left
 
-    if last_data_row_agrupado >= 6:
-        ws_agrupado.cell(row=total_row, column=4, value=f"=SUM(D6:D{last_data_row_agrupado})").number_format = num_fmt_int
-        ws_agrupado.cell(row=total_row, column=5, value=f"=SUM(E6:E{last_data_row_agrupado})").number_format = num_fmt_curr
-        ws_agrupado.cell(row=total_row, column=6, value=f"=SUM(F6:F{last_data_row_agrupado})").number_format = num_fmt_curr
-        ws_agrupado.cell(row=total_row, column=7, value=f"=SUM(G6:G{last_data_row_agrupado})").number_format = num_fmt_curr
-        ws_agrupado.cell(row=total_row, column=8, value=f"=SUM(H6:H{last_data_row_agrupado})").number_format = num_fmt_curr
-        ws_agrupado.cell(row=total_row, column=9, value=f"=SUM(I6:I{last_data_row_agrupado})").number_format = num_fmt_curr
-        ws_agrupado.cell(row=total_row, column=10, value=f"=SUM(J6:J{last_data_row_agrupado})").number_format = num_fmt_curr
+    if last_data_row_agrupado >= 7:
+        ws_agrupado.cell(row=total_row, column=4, value=f"=SUM(D7:D{last_data_row_agrupado})").number_format = num_fmt_int
+        for col_idx in range(5, 13):
+            col_letter = get_column_letter(col_idx)
+            ws_agrupado.cell(row=total_row, column=col_idx, value=f"=SUM({col_letter}7:{col_letter}{last_data_row_agrupado})").number_format = num_fmt_curr
     else:
-        for c_idx in range(4, 11):
+        for c_idx in range(4, 13):
             ws_agrupado.cell(row=total_row, column=c_idx, value=0)
 
-    for c_idx in range(1, 14):
+    for c_idx in range(1, 16):
         c_tot = ws_agrupado.cell(row=total_row, column=c_idx)
         c_tot.font = font_bold
         c_tot.fill = fill_total
         c_tot.border = border_total
-        if c_idx >= 4 and c_idx <= 10:
+        if 4 <= c_idx <= 12:
             c_tot.alignment = align_right
 
-    ws_agrupado.freeze_panes = "A6"
+    ws_agrupado.freeze_panes = "A7"
+
 
     # =========================================================================
     # Hoja 2: Gastos menores B13
     # =========================================================================
     ws_b13 = wb.create_sheet(title="Gastos menores B13")
     headers_b13 = [
-        "Fecha", "Proveedor", "Nota", "Subtotal", "ITBIS", "Importe",
-        "Entidad", "Motivo", "NCF (por asignar)"
+        "Fecha", "Proveedor", "Nota", "Importe Total", "Monto sujeto a retención", "ITBIS",
+        "Monto Retención de renta", "Importe Efectivo", "Entidad", "Motivo", "NCF (por asignar)"
     ]
     ws_b13.append(headers_b13)
 
@@ -693,13 +730,34 @@ def write_excel_agrupacion(
 
         nota_limpia = tx.nota.replace("\r\n", " | ").replace("\n", " | ") if tx.nota else ""
 
+        monto_pagado = float(tx.importe_sujeto)
+        if r.tipo_gasto == "Servicio No Profesional":
+            monto_sujeto = round(monto_pagado / (1.0 - t_no_prof), 2)
+            ret_renta = round(monto_sujeto * t_no_prof, 2)
+            itbis_b13 = 0.0 if r.itbis_exento else round(monto_sujeto * 0.18, 2)
+        elif r.tipo_gasto == "Servicio Profesional":
+            monto_sujeto = round(monto_pagado / (1.0 - t_prof), 2)
+            ret_renta = round(monto_sujeto * t_prof, 2)
+            itbis_b13 = 0.0 if r.itbis_exento else round(monto_sujeto * 0.18, 2)
+        elif r.tipo_gasto == "Bien":
+            monto_sujeto = monto_pagado
+            ret_renta = 0.0
+            itbis_b13 = 0.0 if r.itbis_exento else round(monto_sujeto * 0.18, 2)
+        else:
+            monto_sujeto = monto_pagado
+            ret_renta = 0.0
+            itbis_b13 = 0.0 if r.itbis_exento else float(tx.impuesto)
+        importe_b13 = round(monto_sujeto + itbis_b13, 2)
+
         row_vals = [
             f_str,
             tx.proveedor,
             nota_limpia,
-            float(tx.importe_sujeto),
-            float(tx.impuesto),
-            float(tx.importe),
+            monto_pagado,
+            monto_sujeto,
+            itbis_b13,
+            ret_renta,
+            importe_b13,
             tx.departamento,
             r.motivo_b13 or "Sin comprobante",
             ""
@@ -710,10 +768,10 @@ def write_excel_agrupacion(
             cell = ws_b13.cell(row=b13_curr_row, column=col_idx)
             cell.font = font_regular
             cell.border = border_cell
-            if col_idx in (4, 5, 6):
+            if col_idx in (4, 5, 6, 7, 8):
                 cell.number_format = num_fmt_curr
                 cell.alignment = align_right
-            elif col_idx in (1, 8, 9):
+            elif col_idx in (1, 9, 10, 11):
                 cell.alignment = align_center
 
         b13_curr_row += 1
@@ -725,11 +783,11 @@ def write_excel_agrupacion(
     ws_b13.cell(row=total_row_b13, column=3).alignment = align_left
 
     if last_data_row_b13 >= 2:
-        ws_b13.cell(row=total_row_b13, column=4, value=f"=SUM(D2:D{last_data_row_b13})").number_format = num_fmt_curr
-        ws_b13.cell(row=total_row_b13, column=5, value=f"=SUM(E2:E{last_data_row_b13})").number_format = num_fmt_curr
-        ws_b13.cell(row=total_row_b13, column=6, value=f"=SUM(F2:F{last_data_row_b13})").number_format = num_fmt_curr
+        for c_idx in (4, 5, 6, 7, 8):
+            c_letter = get_column_letter(c_idx)
+            ws_b13.cell(row=total_row_b13, column=c_idx, value=f"=SUM({c_letter}2:{c_letter}{last_data_row_b13})").number_format = num_fmt_curr
     else:
-        for c_idx in (4, 5, 6):
+        for c_idx in (4, 5, 6, 7, 8):
             ws_b13.cell(row=total_row_b13, column=c_idx, value=0).number_format = num_fmt_curr
 
     for c_idx in range(1, len(headers_b13) + 1):
@@ -737,7 +795,7 @@ def write_excel_agrupacion(
         c_tot.font = font_bold
         c_tot.fill = fill_total
         c_tot.border = border_total
-        if c_idx in (4, 5, 6):
+        if c_idx in (4, 5, 6, 7, 8):
             c_tot.alignment = align_right
 
     ws_b13.freeze_panes = "A2"

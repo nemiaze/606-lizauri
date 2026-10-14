@@ -17,7 +17,8 @@ def test_full_pipeline_run(tmp_path):
         transacciones_path="muestra.xlsx",
         proveedores_path="Proveedores.xlsx",
         salida_dir=str(out_dir),
-        tasa_retencion=0.10
+        tasa_retencion_profesional=0.15,
+        tasa_retencion_no_profesional=0.03
     )
 
     exit_code = run_pipeline(cfg)
@@ -60,12 +61,14 @@ def test_full_pipeline_run(tmp_path):
     assert wb.sheetnames == ["Agrupado por proveedor", "Gastos menores B13", "Detalle"]
 
     ws_agrupado = wb["Agrupado por proveedor"]
-    # Celda B3 es la tasa de retención
-    assert ws_agrupado["B3"].value == 0.10
+    # Celda B3 es la tasa de retención profesional (15%)
+    assert ws_agrupado["B3"].value == 0.15
+    # Celda B4 es la tasa de retención no profesional (3%)
+    assert ws_agrupado["B4"].value == 0.03
 
-    # Total row formula en fila 9
-    assert ws_agrupado["D9"].value == "=SUM(D6:D8)"
-    assert ws_agrupado["J9"].value == "=SUM(J6:J8)"
+    # Con 3 proveedores, datos en filas 7-9, total row en fila 10
+    assert ws_agrupado["D10"].value == "=SUM(D7:D9)"
+    assert ws_agrupado["K10"].value == "=SUM(K7:K9)"
 
     # Hoja Detalle tiene 6 filas de datos (filas 2 a 7)
     ws_detalle = wb["Detalle"]

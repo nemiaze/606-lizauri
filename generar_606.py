@@ -34,7 +34,8 @@ def run_pipeline(config: AppConfig) -> int:
     print(f"Transacciones : {config.transacciones_path}")
     print(f"Proveedores   : {config.proveedores_path}")
     print(f"Directorio    : {config.salida_dir}")
-    print(f"Tasa Retención: {float(config.tasa_retencion) * 100:.1f}%")
+    print(f"Tasa Prof.    : {float(config.tasa_retencion_profesional) * 100:.1f}%")
+    print(f"Tasa No Prof. : {float(config.tasa_retencion_no_profesional) * 100:.1f}%")
     if config.periodo:
         print(f"Período Fiscal: {config.periodo}")
     print("-" * 75)
@@ -153,9 +154,14 @@ def main():
         help="Directorio de salida para los archivos generados. Por defecto ./salida."
     )
     parser.add_argument(
-        "-r", "--tasa-retencion",
+        "--tasa-profesional",
         type=float,
-        help="Tasa de retención sobre servicios (ej. 0.10 para 10%%)."
+        help="Tasa de retención ISR para servicios profesionales (ej. 0.15 para 15%%)."
+    )
+    parser.add_argument(
+        "--tasa-no-profesional",
+        type=float,
+        help="Tasa de retención ISR para servicios no profesionales (ej. 0.03 para 3%%)."
     )
     parser.add_argument(
         "--periodo",
@@ -188,7 +194,8 @@ def main():
         transacciones_path=args.transacciones,
         proveedores_path=args.proveedores,
         salida_dir=args.salida,
-        tasa_retencion=args.tasa_retencion,
+        tasa_retencion_profesional=args.tasa_profesional,
+        tasa_retencion_no_profesional=args.tasa_no_profesional,
         periodo=args.periodo
     )
 

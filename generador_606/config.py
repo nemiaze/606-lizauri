@@ -22,20 +22,26 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "archivo_incidencias": "incidencias.txt",
     },
     "fiscal": {
-        "tasa_retencion_renta": 0.10,
-        "tipo_bienes_servicios_606": "09",
+        "tasa_retencion_profesional": 0.15,
+        "tasa_retencion_no_profesional": 0.03,
+        "tipo_bienes_servicios_606": "09 - COMPRAS Y GASTOS QUE FORMARAN PARTE DEL COSTO DE VENTA",
         "tipo_retencion_isr": "02",
         "bienes_vs_servicios_606": "Bienes",
-        "forma_pago_defecto_credito": "04",
-        "forma_pago_defecto_pagado": "02",
+        "forma_pago_defecto_credito": "04 - COMPRA A CRÉDITO",
+        "forma_pago_defecto_pagado": "02 - CHEQUES/TRANSFERENCIAS/DEPÓSITO",
     },
     "clasificacion_nota": {
-        "keywords_servicio": [
-            "servicio", "servicios", "honorario", "honorarios",
-            "mano de obra", "reparacion", "reparación", "mantenimiento",
-            "alquiler", "arrendamiento", "transporte", "flete",
-            "asesoria", "asesoría", "consultoria", "consultoría",
-            "instalacion", "instalación", "confeccion", "confección"
+        "keywords_servicio_profesional": [
+            "honorario", "honorarios", "asesoria", "asesoría",
+            "consultoria", "consultoría", "profesional", "abogado",
+            "contador", "ingeniero", "arquitecto", "medico", "médico",
+            "notario", "auditoria", "auditoría"
+        ],
+        "keywords_servicio_no_profesional": [
+            "servicio", "servicios", "mano de obra", "reparacion",
+            "reparación", "mantenimiento", "alquiler", "arrendamiento",
+            "transporte", "flete", "instalacion", "instalación",
+            "confeccion", "confección", "limpieza", "seguridad"
         ],
         "keywords_bien": [
             "bien", "bienes", "mercancia", "mercancía", "material",
@@ -46,6 +52,46 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     },
     "excepciones_gastos_menores": {
         "proveedores_b13": ["dj ludo"],
+    },
+    "reglas_proveedor": {
+        "proveedores_bien": ["pescaderia chepe", "javier valerio"],
+        "proveedores_servicio_no_profesional": [
+            "faris polanco", "antonio polanco", "jose miguel brito", "brito batista"
+        ],
+        "proveedores_servicio_profesional": [],
+        "proveedores_exento_itbis": ["pescaderia chepe"],
+    },
+    "itbis_exento": {
+        "keywords_exento": [
+            # Bienes exentos
+            "animal vivo", "animales vivos",
+            "carne fresca", "carne refrigerada", "carne congelada", "carne",
+            "pescado", "pesca",
+            "lacteo", "lácteo", "leche", "queso", "yogurt",
+            "miel",
+            "huevo", "huevos",
+            "planta para siembra", "plantula", "plántula",
+            "legumbre", "hortaliza", "tuberculo", "tubérculo",
+            "fruta", "frutas",
+            "cafe", "café",
+            "cereal", "harina", "grano",
+            "molineria", "molinería",
+            "semilla oleaginosa", "semilla",
+            "embutido", "embutidos",
+            "cacao",
+            # Servicios exentos
+            "servicio financiero", "seguro", "seguros",
+            "pension", "pensión", "jubilacion", "jubilación",
+            "transporte terrestre", "transporte de carga",
+            "electricidad", "energia electrica", "energía eléctrica",
+            "agua potable", "acueducto",
+            "alquiler vivienda", "renta vivienda",
+            "salud", "medico", "médico", "hospital", "clinica", "clínica",
+            "educacion", "educación", "escuela", "colegio", "universidad",
+            "cultural", "cultura",
+            "funerario", "funeraria", "funeral",
+            "salon de belleza", "salón de belleza", "peluqueria", "peluquería",
+        ]
     },
     "columnas_transacciones": {
         "fecha": "Fecha",
@@ -79,15 +125,23 @@ class AppConfig:
     archivo_606_csv: str = "formato_606.csv"
     archivo_agrupacion: str = "agrupacion_sin_comprobante.xlsx"
     archivo_incidencias: str = "incidencias.txt"
-    tasa_retencion: Decimal = Decimal("0.10")
-    tipo_bienes_servicios_606: str = "09"
+    tasa_retencion_profesional: Decimal = Decimal("0.15")
+    tasa_retencion_no_profesional: Decimal = Decimal("0.03")
+    tipo_bienes_servicios_606: str = "09 - COMPRAS Y GASTOS QUE FORMARAN PARTE DEL COSTO DE VENTA"
     tipo_retencion_isr: str = "02"
     bienes_vs_servicios_606: str = "Bienes"
-    forma_pago_credito: str = "04"
-    forma_pago_pagado: str = "02"
+    forma_pago_credito: str = "04 - COMPRA A CRÉDITO"
+    forma_pago_pagado: str = "02 - CHEQUES/TRANSFERENCIAS/DEPÓSITO"
     keywords_servicio: List[str] = field(default_factory=list)
+    keywords_servicio_profesional: List[str] = field(default_factory=list)
+    keywords_servicio_no_profesional: List[str] = field(default_factory=list)
     keywords_bien: List[str] = field(default_factory=list)
+    keywords_itbis_exento: List[str] = field(default_factory=list)
     proveedores_b13: List[str] = field(default_factory=list)
+    proveedores_bien: List[str] = field(default_factory=list)
+    proveedores_servicio_no_profesional: List[str] = field(default_factory=list)
+    proveedores_servicio_profesional: List[str] = field(default_factory=list)
+    proveedores_exento_itbis: List[str] = field(default_factory=list)
     periodo: Optional[str] = None
     columnas_transacciones: Dict[str, str] = field(default_factory=dict)
     columnas_proveedores: Dict[str, str] = field(default_factory=dict)
@@ -99,7 +153,8 @@ class AppConfig:
         transacciones_path: Optional[str] = None,
         proveedores_path: Optional[str] = None,
         salida_dir: Optional[str] = None,
-        tasa_retencion: Optional[float] = None,
+        tasa_retencion_profesional: Optional[float] = None,
+        tasa_retencion_no_profesional: Optional[float] = None,
         periodo: Optional[str] = None,
     ) -> "AppConfig":
         raw_cfg = dict(DEFAULT_CONFIG)
@@ -128,11 +183,16 @@ class AppConfig:
         p_path = Path(proveedores_path or archivos.get("proveedores_defecto", "Proveedores.xlsx"))
         out_dir = Path(salida_dir or archivos.get("salida_defecto", "./salida"))
 
-        # Resolve tasa de retención
-        if tasa_retencion is not None:
-            tasa_dec = Decimal(str(tasa_retencion))
+        # Resolve tasas de retención diferenciadas
+        if tasa_retencion_profesional is not None:
+            tasa_prof_dec = Decimal(str(tasa_retencion_profesional))
         else:
-            tasa_dec = Decimal(str(fiscal.get("tasa_retencion_renta", 0.10)))
+            tasa_prof_dec = Decimal(str(fiscal.get("tasa_retencion_profesional", 0.15)))
+
+        if tasa_retencion_no_profesional is not None:
+            tasa_no_prof_dec = Decimal(str(tasa_retencion_no_profesional))
+        else:
+            tasa_no_prof_dec = Decimal(str(fiscal.get("tasa_retencion_no_profesional", 0.03)))
 
         return cls(
             transacciones_path=t_path,
@@ -143,15 +203,23 @@ class AppConfig:
             archivo_606_csv=archivos.get("archivo_606_csv", "formato_606.csv"),
             archivo_agrupacion=archivos.get("archivo_agrupacion", "agrupacion_sin_comprobante.xlsx"),
             archivo_incidencias=archivos.get("archivo_incidencias", "incidencias.txt"),
-            tasa_retencion=tasa_dec,
-            tipo_bienes_servicios_606=str(fiscal.get("tipo_bienes_servicios_606", "09")),
+            tasa_retencion_profesional=tasa_prof_dec,
+            tasa_retencion_no_profesional=tasa_no_prof_dec,
+            tipo_bienes_servicios_606=str(fiscal.get("tipo_bienes_servicios_606", "09 - COMPRAS Y GASTOS QUE FORMARAN PARTE DEL COSTO DE VENTA")),
             tipo_retencion_isr=str(fiscal.get("tipo_retencion_isr", "02")),
             bienes_vs_servicios_606=str(fiscal.get("bienes_vs_servicios_606", "Bienes")),
-            forma_pago_credito=str(fiscal.get("forma_pago_defecto_credito", "04")),
-            forma_pago_pagado=str(fiscal.get("forma_pago_defecto_pagado", "02")),
-            keywords_servicio=clasificacion.get("keywords_servicio", []),
+            forma_pago_credito=str(fiscal.get("forma_pago_defecto_credito", "04 - COMPRA A CRÉDITO")),
+            forma_pago_pagado=str(fiscal.get("forma_pago_defecto_pagado", "02 - CHEQUES/TRANSFERENCIAS/DEPÓSITO")),
+            keywords_servicio=clasificacion.get("keywords_servicio_profesional", []) + clasificacion.get("keywords_servicio_no_profesional", []),
+            keywords_servicio_profesional=clasificacion.get("keywords_servicio_profesional", []),
+            keywords_servicio_no_profesional=clasificacion.get("keywords_servicio_no_profesional", []),
             keywords_bien=clasificacion.get("keywords_bien", []),
+            keywords_itbis_exento=raw_cfg.get("itbis_exento", {}).get("keywords_exento", []),
             proveedores_b13=excepciones.get("proveedores_b13", ["dj ludo"]),
+            proveedores_bien=[str(x).strip().lower() for x in raw_cfg.get("reglas_proveedor", {}).get("proveedores_bien", ["pescaderia chepe", "javier valerio"])],
+            proveedores_servicio_no_profesional=[str(x).strip().lower() for x in raw_cfg.get("reglas_proveedor", {}).get("proveedores_servicio_no_profesional", ["faris polanco", "antonio polanco", "jose miguel brito", "brito batista"])],
+            proveedores_servicio_profesional=[str(x).strip().lower() for x in raw_cfg.get("reglas_proveedor", {}).get("proveedores_servicio_profesional", [])],
+            proveedores_exento_itbis=[str(x).strip().lower() for x in raw_cfg.get("reglas_proveedor", {}).get("proveedores_exento_itbis", ["pescaderia chepe"])],
             periodo=str(periodo).strip() if periodo else None,
             columnas_transacciones=raw_cfg.get("columnas_transacciones", {}),
             columnas_proveedores=raw_cfg.get("columnas_proveedores", {}),

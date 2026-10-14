@@ -15,6 +15,7 @@ from .models import Incidence, ProcessedRecord, ProviderMaster, Transaction
 from .normalizer import (
     classify_bien_servicio,
     extract_rnc_cedula_from_note,
+    is_itbis_exento,
     is_valid_ncf,
     normalize_text,
     parse_date,
@@ -265,6 +266,22 @@ def process_records(
                     severidad="ADVERTENCIA"
                 ))
 
+        # Detectar exención de ITBIS según la Nota o reglas por proveedor
+        exento = is_itbis_exento(tx.nota, config.keywords_itbis_exento)
+        if not exento and any(p in norm_prov for p in config.proveedores_exento_itbis):
+            exento = True
+        if exento and tx.impuesto > 0:
+            incidences.append(Incidence(
+                tipo="ITBIS_EN_PRODUCTO_EXENTO",
+                fila=tx.fila,
+                proveedor=tx.proveedor,
+                descripcion=(
+                    f"El registro tiene ITBIS ({tx.impuesto}) pero el producto/servicio "
+                    f"en la Nota parece ser exento según la DGII. ITBIS corregido a 0."
+                ),
+                severidad="ADVERTENCIA"
+            ))
+
         # Búsqueda en el maestro
         p_master = providers.get(norm_prov)
         if not p_master:
@@ -313,7 +330,8 @@ def process_records(
                 fuente_rnc="Maestro" if rnc_valido else "N/A",
                 tipo_gasto="Bien",
                 destino="606",
-                observaciones=[]
+                observaciones=[],
+                itbis_exento=exento
             )
             records.append(rec)
 
@@ -334,7 +352,8 @@ def process_records(
                     tipo_gasto="Sin clasificar",
                     destino="B13 Gastos menores",
                     motivo_b13="Excepción DJ Ludo",
-                    observaciones=["Excepción DJ Ludo"]
+                    observaciones=["Excepción DJ Ludo"],
+                    itbis_exento=exento
                 )
                 records.append(rec)
 
@@ -374,8 +393,20 @@ def process_records(
                     tipo_id_final = None
                     fuente_final = "N/A"
 
-                if not rnc_final:
-                    # No se encontró ni en maestro ni en nota -> Gastos Menores B13
+                # REGLA B13:
+                # 1. Aquellos que no se encuentran en el maestro de proveedores,
+                #    no tienen NCF, no tienen información en la columna Nota,
+                #    y no se especifica producto/servicio -> Gasto menor B13.
+                # 2. Registros sin RNC/Cédula válido ni en maestro ni en nota -> Gasto menor B13.
+                sin_nota = not tx.nota or not str(tx.nota).strip()
+                sin_prod = not tx.producto_servicio or not str(tx.producto_servicio).strip()
+                no_en_maestro = (p_master is None or not p_master.is_valid_id)
+                es_b13_por_falta_datos = (no_en_maestro and sin_nota and sin_prod)
+
+                if (not rnc_final) or es_b13_por_falta_datos:
+                    motivo = "Sin RNC/Cédula en maestro ni nota"
+                    if es_b13_por_falta_datos:
+                        motivo = "Proveedor no en maestro, sin NCF ni detalle en nota/producto"
                     rec = ProcessedRecord(
                         tx=tx,
                         is_606=False,
@@ -385,18 +416,35 @@ def process_records(
                         fuente_rnc="N/A",
                         tipo_gasto="Sin clasificar",
                         destino="B13 Gastos menores",
-                        motivo_b13="Sin RNC/Cédula en maestro ni nota",
-                        observaciones=["Sin RNC/Cédula"]
+                        motivo_b13=motivo,
+                        observaciones=[motivo],
+                        itbis_exento=exento
                     )
                     records.append(rec)
 
                 else:
                     # Encontrado -> AGRUPADO POR PROVEEDOR
-                    tipo_gasto = classify_bien_servicio(
-                        tx.nota,
-                        config.keywords_servicio,
-                        config.keywords_bien
-                    )
+                    # Determinar tipo_gasto:
+                    # 1. Reglas específicas por proveedor
+                    tipo_gasto = None
+                    if any(p in norm_prov for p in config.proveedores_bien):
+                        tipo_gasto = "Bien"
+                    elif any(p in norm_prov for p in config.proveedores_servicio_profesional):
+                        tipo_gasto = "Servicio Profesional"
+                    elif any(p in norm_prov for p in config.proveedores_servicio_no_profesional):
+                        tipo_gasto = "Servicio No Profesional"
+
+                    # 2. Si no coincide por proveedor, clasificar por Nota y Producto/Servicio
+                    if not tipo_gasto:
+                        texto_eval = tx.nota
+                        if not texto_eval or not str(texto_eval).strip():
+                            texto_eval = tx.producto_servicio
+                        tipo_gasto = classify_bien_servicio(
+                            texto_eval,
+                            config.keywords_servicio_profesional,
+                            config.keywords_servicio_no_profesional,
+                            config.keywords_bien
+                        )
 
                     if tipo_gasto == "Sin clasificar":
                         obs_sin_clasificar = "nota no indica bien o servicio" if observaciones_reg else "Nota no indica bien o servicio"
@@ -430,7 +478,8 @@ def process_records(
                         fuente_rnc=fuente_final,
                         tipo_gasto=tipo_gasto,
                         destino="Agrupado",
-                        observaciones=observaciones_reg
+                        observaciones=observaciones_reg,
+                        itbis_exento=exento
                     )
                     records.append(rec)
 

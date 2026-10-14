@@ -228,12 +228,21 @@ def extract_rnc_cedula_from_note(note_val: Any) -> Tuple[Optional[str], Optional
 
 def classify_bien_servicio(
     note_val: Any,
-    keywords_servicio: List[str],
-    keywords_bien: List[str]
+    keywords_servicio_profesional: List[str],
+    keywords_servicio_no_profesional: List[str],
+    keywords_bien: List[str],
+    keywords_servicio: Optional[List[str]] = None,
 ) -> str:
     """
-    Clasifica un registro en 'Servicio', 'Bien' o 'Sin clasificar' según la columna Nota.
-    Se normaliza la nota (minúsculas, sin acentos) para la búsqueda.
+    Clasifica un registro en 'Servicio Profesional', 'Servicio No Profesional',
+    'Bien' o 'Sin clasificar' según la columna Nota.
+
+    Tasas de retención ISR aplicables (DGII):
+      - Servicio Profesional     → 15%
+      - Servicio No Profesional  →  3%
+      - Bien / Sin clasificar    →  0%
+
+    Prioridad de búsqueda: Profesional > No Profesional > Bien.
     """
     if note_val is None or pd.isna(note_val):
         return "Sin clasificar"
@@ -242,16 +251,54 @@ def classify_bien_servicio(
     if not norm_note:
         return "Sin clasificar"
 
-    # Prioridad: Servicio
-    for kw in keywords_servicio:
+    # 1. Servicio Profesional (mayor retención → prioridad alta)
+    for kw in keywords_servicio_profesional:
         norm_kw = normalize_text(kw)
         if norm_kw and norm_kw in norm_note:
-            return "Servicio"
+            return "Servicio Profesional"
 
-    # Segunda: Bien
+    # 2. Servicio No Profesional
+    for kw in keywords_servicio_no_profesional:
+        norm_kw = normalize_text(kw)
+        if norm_kw and norm_kw in norm_note:
+            return "Servicio No Profesional"
+
+    # 3. Bien
     for kw in keywords_bien:
         norm_kw = normalize_text(kw)
         if norm_kw and norm_kw in norm_note:
             return "Bien"
 
     return "Sin clasificar"
+
+
+def is_itbis_exento(note_val: Any, keywords_exento: List[str]) -> bool:
+    """
+    Determina si un producto/servicio está exento de ITBIS según la DGII,
+    buscando palabras clave de exención en la columna Nota.
+
+    Bienes exentos (Art. 343 CNDR): animales vivos, carnes frescas/refrigeradas/
+    congeladas, pescado de consumo popular, lácteos (excl. yogurt y mantequilla),
+    leche, miel, plantas para siembra, legumbres/hortalizas/tubérculos sin
+    procesar, frutas sin procesar, café sin tostar, cereales/harinas/granos,
+    productos de molinería, semillas oleaginosas, embutidos, cacao, leña, etc.
+
+    Servicios exentos: financieros/seguros, pensiones/jubilaciones, transporte
+    terrestre, electricidad/agua/basura, alquiler de viviendas, salud,
+    educativos/culturales, funerarios, salones de belleza/peluquerías.
+
+    Retorna True si el producto/servicio es exento de ITBIS, False si no.
+    """
+    if note_val is None or pd.isna(note_val):
+        return False
+
+    norm_note = normalize_text(note_val)
+    if not norm_note:
+        return False
+
+    for kw in keywords_exento:
+        norm_kw = normalize_text(kw)
+        if norm_kw and norm_kw in norm_note:
+            return True
+
+    return False

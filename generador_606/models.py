@@ -68,3 +68,4 @@ class ProcessedRecord:
     destino: str = "Agrupado"        # "606", "Agrupado", "B13 Gastos menores"
     motivo_b13: Optional[str] = None
     observaciones: List[str] = field(default_factory=list)
+    itbis_exento: bool = False         # True si el producto/servicio está exento de ITBIS (DGII)

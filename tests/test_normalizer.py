@@ -127,11 +127,13 @@ def test_extract_rnc_cedula_from_note():
 
 
 def test_classify_bien_servicio():
-    kw_serv = ["servicio", "honorario", "mantenimiento"]
+    kw_prof = ["honorario", "consultoria", "profesional"]
+    kw_no_prof = ["servicio", "servicios", "mantenimiento"]
     kw_bien = ["bien", "bienes", "material", "compra"]
 
-    assert classify_bien_servicio("Servicio de consultoría", kw_serv, kw_bien) == "Servicio"
-    assert classify_bien_servicio("Servicio Cocina", kw_serv, kw_bien) == "Servicio"
-    assert classify_bien_servicio("Compra de bienes de oficina", kw_serv, kw_bien) == "Bien"
-    assert classify_bien_servicio("Diomedes de los Santos 066-0005003-0", kw_serv, kw_bien) == "Sin clasificar"
-    assert classify_bien_servicio(None, kw_serv, kw_bien) == "Sin clasificar"
+    assert classify_bien_servicio("Honorarios de abogado", kw_prof, kw_no_prof, kw_bien) == "Servicio Profesional"
+    assert classify_bien_servicio("Servicio de cocina", kw_prof, kw_no_prof, kw_bien) == "Servicio No Profesional"
+    assert classify_bien_servicio("Servicio de consultoría", kw_prof, kw_no_prof, kw_bien) == "Servicio Profesional"
+    assert classify_bien_servicio("Compra de bienes de oficina", kw_prof, kw_no_prof, kw_bien) == "Bien"
+    assert classify_bien_servicio("Diomedes de los Santos 066-0005003-0", kw_prof, kw_no_prof, kw_bien) == "Sin clasificar"
+    assert classify_bien_servicio(None, kw_prof, kw_no_prof, kw_bien) == "Sin clasificar"

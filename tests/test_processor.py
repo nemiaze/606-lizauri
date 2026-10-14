@@ -17,7 +17,8 @@ def test_setup():
         transacciones_path="muestra.xlsx",
         proveedores_path="Proveedores.xlsx",
         salida_dir="./salida",
-        tasa_retencion=0.10
+        tasa_retencion_profesional=0.15,
+        tasa_retencion_no_profesional=0.03
     )
     providers = load_providers(cfg.proveedores_path, hoja_name=cfg.hoja_proveedores)
     transactions = load_transactions(cfg.transacciones_path)
@@ -68,7 +69,8 @@ def test_seccion_7_processing(test_setup):
     # Adalfi Bido (2 registros, Servicios)
     adalfi_recs = [r for r in rec_agrupados if "adalfi" in r.tx.proveedor_norm]
     assert len(adalfi_recs) == 2
-    assert all(r.tipo_gasto == "Servicio" for r in adalfi_recs)
+    # Adalfi tiene "Servicio" en la nota, que es No Profesional según las keywords
+    assert all(r.tipo_gasto in ("Servicio Profesional", "Servicio No Profesional") for r in adalfi_recs)
     assert sum(r.tx.importe_sujeto for r in adalfi_recs) == Decimal("2500.00")
 
     # Adelaida Sarante (1 registro, Sin clasificar, RNC de maestro)
